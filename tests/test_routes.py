@@ -1,126 +1,143 @@
 """
-Account API Service Test Suite
+Account Service
 
-Test cases can be run with the following:
-  nosetests -v --with-spec --spec-color
-  coverage report -m
+This microservice handles the lifecycle of Accounts
 """
-import os
-import logging
-from unittest import TestCase
-from tests.factories import AccountFactory
+# pylint: disable=unused-import
+from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
+from service.models import Account
 from service.common import status  # HTTP Status Codes
-from service.models import db, Account, init_db
-from service.routes import app
+from . import app  # Import Flask application
 
-DATABASE_URI = os.getenv(
-    "DATABASE_URI", "postgresql://postgres:postgres@localhost:5432/postgres"
-)
 
-BASE_URL = "/accounts"
+############################################################
+# Health Endpoint
+############################################################
+@app.route("/health")
+def health():
+    """Health Status"""
+    return jsonify(dict(status="OK")), status.HTTP_200_OK
 
 
 ######################################################################
-#  T E S T   C A S E S
+# GET INDEX
 ######################################################################
-class TestAccountService(TestCase):
-    """Account Service Tests"""
+@app.route("/")
+def index():
+    """Root URL response"""
+    return (
+        jsonify(
+            name="Account REST API Service",
+            version="1.0",
+            paths=url_for("list_accounts", _external=True),
+        ),
+        status.HTTP_200_OK,
+    )
 
-    @classmethod
-    def setUpClass(cls):
-        """Run once before all tests"""
-        app.config["TESTING"] = True
-        app.config["DEBUG"] = False
-        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
-        app.logger.setLevel(logging.CRITICAL)
-        init_db(app)
 
-    @classmethod
-    def tearDownClass(cls):
-        """Runs once before test suite"""
+######################################################################
+# CREATE A NEW ACCOUNT
+######################################################################
+@app.route("/accounts", methods=["POST"])
+def create_accounts():
+    """
+    Creates an Account
+    This endpoint will create an Account based the data in the body that is posted
+    """
+    app.logger.info("Request to create an Account")
+    check_content_type("application/json")
+    account = Account()
+    account.deserialize(request.get_json())
+    account.create()
+    message = account.serialize()
+    location_url = url_for("get_accounts", account_id=account.id, _external=True)
+    return make_response(
+        jsonify(message), status.HTTP_201_CREATED, {"Location": location_url}
+    )
 
-    def setUp(self):
-        """Runs before each test"""
-        db.session.query(Account).delete()  # clean up the last tests
-        db.session.commit()
 
-        self.client = app.test_client()
+######################################################################
+# LIST ALL ACCOUNTS
+######################################################################
+@app.route("/accounts", methods=["GET"])
+def list_accounts():
+    """
+    List all Accounts
+    This endpoint will list all Accounts
+    """
+    app.logger.info("Request to list Accounts")
+    accounts = Account.all()
+    account_list = [account.serialize() for account in accounts]
+    app.logger.info("Returning [%s] accounts", len(account_list))
+    return jsonify(account_list), status.HTTP_200_OK
 
-    def tearDown(self):
-        """Runs once after each test case"""
-        db.session.remove()
 
-    ######################################################################
-    #  H E L P E R   M E T H O D S
-    ######################################################################
-
-    def _create_accounts(self, count):
-        """Factory method to create accounts in bulk"""
-        accounts = []
-        for _ in range(count):
-            account = AccountFactory()
-            response = self.client.post(BASE_URL, json=account.serialize())
-            self.assertEqual(
-                response.status_code,
-                status.HTTP_201_CREATED,
-                "Could not create test Account",
-            )
-            new_account = response.get_json()
-            account.id = new_account["id"]
-            accounts.append(account)
-        return accounts
-
-    ######################################################################
-    #  A C C O U N T   T E S T   C A S E S
-    ######################################################################
-
-    def test_index(self):
-        """It should get 200_OK from the Home Page"""
-        response = self.client.get("/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_health(self):
-        """It should be healthy"""
-        resp = self.client.get("/health")
-        self.assertEqual(resp.status_code, 200)
-        data = resp.get_json()
-        self.assertEqual(data["status"], "OK")
-
-    def test_create_account(self):
-        """It should Create a new Account"""
-        account = AccountFactory()
-        response = self.client.post(
-            BASE_URL,
-            json=account.serialize(),
-            content_type="application/json"
+######################################################################
+# READ AN ACCOUNT
+######################################################################
+@app.route("/accounts/<int:account_id>", methods=["GET"])
+def get_accounts(account_id):
+    """
+    Reads an Account
+    This endpoint will read an Account based the account_id that is requested
+    """
+    app.logger.info("Request to read an Account with id: %s", account_id)
+    account = Account.find(account_id)
+    if not account:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Account with id [{account_id}] could not be found.",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+    return account.serialize(), status.HTTP_200_OK
 
-        # Make sure location header is set
-        location = response.headers.get("Location", None)
-        self.assertIsNotNone(location)
 
-        # Check the data is correct
-        new_account = response.get_json()
-        self.assertEqual(new_account["name"], account.name)
-        self.assertEqual(new_account["email"], account.email)
-        self.assertEqual(new_account["address"], account.address)
-        self.assertEqual(new_account["phone_number"], account.phone_number)
-        self.assertEqual(new_account["date_joined"], str(account.date_joined))
-
-    def test_bad_request(self):
-        """It should not Create an Account when sending the wrong data"""
-        response = self.client.post(BASE_URL, json={"name": "not enough data"})
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_unsupported_media_type(self):
-        """It should not Create an Account when sending the wrong media type"""
-        account = AccountFactory()
-        response = self.client.post(
-            BASE_URL,
-            json=account.serialize(),
-            content_type="test/html"
+######################################################################
+# UPDATE AN EXISTING ACCOUNT
+######################################################################
+@app.route("/accounts/<int:account_id>", methods=["PUT"])
+def update_accounts(account_id):
+    """
+    Update an Account
+    This endpoint will update an Account based on the posted data
+    """
+    app.logger.info("Request to update an Account with id: %s", account_id)
+    account = Account.find(account_id)
+    if not account:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Account with id [{account_id}] could not be found.",
         )
-        self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+    account.deserialize(request.get_json())
+    account.update()
+    return account.serialize(), status.HTTP_200_OK
 
-    # ADD YOUR TEST CASES HERE ...
+
+######################################################################
+# DELETE AN ACCOUNT
+######################################################################
+@app.route("/accounts/<int:account_id>", methods=["DELETE"])
+def delete_accounts(account_id):
+    """
+    Delete an Account
+    This endpoint will delete an Account based on the account_id that is requested
+    """
+    app.logger.info("Request to delete an Account with id: %s", account_id)
+    account = Account.find(account_id)
+    if account:
+        account.delete()
+    return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+#  U T I L I T Y   F U N C T I O N S
+######################################################################
+def check_content_type(media_type):
+    """Checks that the media type is correct"""
+    content_type = request.headers.get("Content-Type")
+    if content_type and content_type == media_type:
+        return
+    app.logger.error("Invalid Content-Type: %s", content_type)
+    abort(
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        f"Content-Type must be {media_type}",
+    )
