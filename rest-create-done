@@ -1,0 +1,4 @@
+curl -i -X POST http://127.0.0.1:5000/accounts \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@doe.com","address":"123 Main St.","phone_number":"555-1212","date_joined":"2026-10-01"}'
+
