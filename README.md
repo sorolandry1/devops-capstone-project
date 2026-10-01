@@ -1,3 +1,5 @@
+
+![Build Status](https://github.com/sorolandry11/devops-capstone-project/actions/workflows/ci-build.yaml/badge.svg)
 # DevOps Capstone Template
    Microservice REST (Python Flask) de gestion des comptes clients d'un site e-commerce : créer, lire, mettre à jour, supprimer et lister des comptes.
    
