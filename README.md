@@ -1,7 +1,6 @@
 # DevOps Capstone Template
-
-
-
+   Microservice REST (Python Flask) de gestion des comptes clients d'un site e-commerce : créer, lire, mettre à jour, supprimer et lister des comptes.
+   
 ```text
 ├── service         <- microservice package
 │   ├── common/     <- common log and error handlers
