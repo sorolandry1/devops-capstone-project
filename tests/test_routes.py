@@ -7,14 +7,14 @@ Test cases can be run with the following:
 """
 import os
 import logging
-from service import app, talisman
-
-HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 from unittest import TestCase
 from tests.factories import AccountFactory
 from service.common import status  # HTTP Status Codes
 from service.models import db, Account, init_db
 from service.routes import app
+from service import talisman
+
+HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql://postgres:postgres@localhost:5432/postgres"
